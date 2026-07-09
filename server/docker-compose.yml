@@ -7,5 +7,11 @@ services:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      # The LLM runs as a local Ollama on the host; inside the container "localhost" is the
+      # container itself, so reach the host's Ollama via host.docker.internal.
+      - Llm__BaseUrl=http://host.docker.internal:11434/v1/
+    extra_hosts:
+      # Makes host.docker.internal resolve to the host on Linux (Docker Desktop maps it natively).
+      - "host.docker.internal:host-gateway"
     # Swagger UI: http://localhost:8080/swagger
-    # A local Ollama service will be added here in a later stage (the LLM provider).
+    # Requires a local Ollama on the host with the configured model pulled (see README).

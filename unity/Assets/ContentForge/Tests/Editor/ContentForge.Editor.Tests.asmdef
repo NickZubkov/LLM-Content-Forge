@@ -1,0 +1,25 @@
+{
+    "name": "ContentForge.Editor.Tests",
+    "rootNamespace": "ContentForge.Editor.Tests",
+    "references": [
+        "ContentForge",
+        "ContentForge.Editor",
+        "UnityEditor.TestRunner",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

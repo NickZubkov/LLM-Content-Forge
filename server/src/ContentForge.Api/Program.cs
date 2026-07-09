@@ -1,7 +1,13 @@
 using System.Net.Http.Headers;
+using System.Text.Json.Serialization;
+using ContentForge.Api.Generation;
 using ContentForge.Api.Llm;
 using ContentForge.Api.Prompts;
+using ContentForge.Api.Validation;
+using FluentValidation;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
+using Polly;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +32,27 @@ builder.Services.AddHttpClient<ILlmClient, OllamaLlmClient>((serviceProvider, ht
     {
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
     }
+})
+.AddResilienceHandler("llm", pipeline =>
+{
+    // Retry transient failures (5xx, 408, connection errors) with exponential backoff + jitter.
+    pipeline.AddRetry(new HttpRetryStrategyOptions
+    {
+        MaxRetryAttempts = 2,
+        BackoffType = DelayBackoffType.Exponential,
+        UseJitter = true,
+        Delay = TimeSpan.FromSeconds(1),
+    });
+});
+
+// Request validation (FluentValidation) and the generation orchestrator.
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddScoped<IContentGenerator, ContentGenerator>();
+
+// Accept and emit enums as strings ("Item"/"Enemy") in JSON.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
 var app = builder.Build();
@@ -37,6 +64,33 @@ app.UseSwaggerUI();
 app.MapGet("/api/v1/health", () => Results.Ok(new HealthResponse("ok")))
    .WithName("Health")
    .WithTags("System");
+
+app.MapPost("/api/v1/generate",
+    async (GenerateRequest request, IContentGenerator generator, CancellationToken cancellationToken) =>
+    {
+        try
+        {
+            var result = await generator.GenerateAsync(request, cancellationToken);
+            return Results.Ok(result);
+        }
+        catch (LlmException ex)
+        {
+            return Results.Problem(
+                title: "LLM backend error",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+        catch (ContentValidationException ex)
+        {
+            return Results.Problem(
+                title: "Invalid content from LLM",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+    })
+    .AddEndpointFilter<ValidationFilter<GenerateRequest>>()
+    .WithName("Generate")
+    .WithTags("Generation");
 
 app.Run();
 

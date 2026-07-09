@@ -10,4 +10,9 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="Prompts\Templates\*.md" />
+    <EmbeddedResource Include="Prompts\Templates\*.md" />
+  </ItemGroup>
+
 </Project>

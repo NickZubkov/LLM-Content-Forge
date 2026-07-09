@@ -2,7 +2,8 @@
     "name": "ContentForge.Editor",
     "rootNamespace": "ContentForge.Editor",
     "references": [
-        "UniTask"
+        "UniTask",
+        "ContentForge"
     ],
     "includePlatforms": [
         "Editor"

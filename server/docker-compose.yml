@@ -1,0 +1,11 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    # Swagger UI: http://localhost:8080/swagger
+    # A local Ollama service will be added here in a later stage (the LLM provider).

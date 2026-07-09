@@ -1,19 +1,32 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
+using ContentForge;
 using Cysharp.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 
 namespace ContentForge.Editor
 {
     /// <summary>
-    /// Editor window that requests generated game content from the Content Forge API and shows the
-    /// raw response. Mapping the response into ScriptableObjects is a later step.
+    /// Editor window that requests generated game content from the Content Forge API, shows a
+    /// New/Changed/Unchanged diff preview, and writes selected entries to ScriptableObject assets.
     /// </summary>
     public sealed class ContentForgeWindow : EditorWindow
     {
         private enum ContentKind { Item, Enemy }
+
+        // One preview row, unified across item/enemy so OnGUI has a single render path.
+        private sealed class Row
+        {
+            public string Title;
+            public DiffStatus Status;
+            public string Detail;
+            public bool Selected;
+            public ApplyOp Op;
+        }
 
         private string _serverUrl = "http://localhost:8080";
         private ContentKind _contentType = ContentKind.Item;
@@ -21,11 +34,13 @@ namespace ContentForge.Editor
         private string _theme = "frozen dungeon";
         private int _levelMin = 1;
         private int _levelMax = 10;
+        private string _targetFolder = "Assets/ContentForge/Generated/Items";
 
         private bool _isBusy;
         private string _status = string.Empty;
-        private string _output = string.Empty;
-        private Vector2 _outputScroll;
+        private string _error = string.Empty;
+        private List<Row> _rows;
+        private Vector2 _scroll;
         private CancellationTokenSource _cts;
 
         [MenuItem("Window/Content Forge")]
@@ -39,7 +54,16 @@ namespace ContentForge.Editor
             using (new EditorGUI.DisabledScope(_isBusy))
             {
                 _serverUrl = EditorGUILayout.TextField("Server URL", _serverUrl);
+
+                EditorGUI.BeginChangeCheck();
                 _contentType = (ContentKind)EditorGUILayout.EnumPopup("Content Type", _contentType);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    _targetFolder = _contentType == ContentKind.Item
+                        ? "Assets/ContentForge/Generated/Items"
+                        : "Assets/ContentForge/Generated/Enemies";
+                }
+
                 _count = EditorGUILayout.IntSlider("Count", _count, 1, 50);
                 _theme = EditorGUILayout.TextField("Theme", _theme);
 
@@ -47,6 +71,8 @@ namespace ContentForge.Editor
                 _levelMin = EditorGUILayout.IntField("Level Min", _levelMin);
                 _levelMax = EditorGUILayout.IntField("Level Max", _levelMax);
                 EditorGUILayout.EndHorizontal();
+
+                _targetFolder = EditorGUILayout.TextField("Target Folder", _targetFolder);
             }
 
             EditorGUILayout.Space();
@@ -74,18 +100,71 @@ namespace ContentForge.Editor
                 EditorGUILayout.HelpBox(_status, _isBusy ? MessageType.Info : MessageType.None);
             }
 
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Result", EditorStyles.boldLabel);
-            _outputScroll = EditorGUILayout.BeginScrollView(_outputScroll, GUILayout.ExpandHeight(true));
-            EditorGUILayout.TextArea(_output, GUILayout.ExpandHeight(true));
-            EditorGUILayout.EndScrollView();
+            if (!string.IsNullOrEmpty(_error))
+            {
+                EditorGUILayout.HelpBox(_error, MessageType.Error);
+            }
+
+            DrawPreview();
         }
+
+        private void DrawPreview()
+        {
+            if (_rows == null || _rows.Count == 0)
+            {
+                return;
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
+
+            _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
+            foreach (var row in _rows)
+            {
+                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+
+                var applicable = row.Status is DiffStatus.New or DiffStatus.Changed;
+                using (new EditorGUI.DisabledScope(!applicable))
+                {
+                    row.Selected = EditorGUILayout.Toggle(row.Selected, GUILayout.Width(18));
+                }
+
+                var prev = GUI.color;
+                GUI.color = StatusColor(row.Status);
+                EditorGUILayout.LabelField($"[{row.Status}]", GUILayout.Width(90));
+                GUI.color = prev;
+
+                EditorGUILayout.LabelField(row.Title, EditorStyles.boldLabel, GUILayout.Width(180));
+                EditorGUILayout.LabelField(row.Detail);
+
+                EditorGUILayout.EndHorizontal();
+            }
+            EditorGUILayout.EndScrollView();
+
+            var applyCount = _rows.Count(r => r.Selected);
+            using (new EditorGUI.DisabledScope(_isBusy || applyCount == 0))
+            {
+                if (GUILayout.Button($"Apply Selected ({applyCount})"))
+                {
+                    ApplySelected();
+                }
+            }
+        }
+
+        private static Color StatusColor(DiffStatus status) => status switch
+        {
+            DiffStatus.New => Color.green,
+            DiffStatus.Changed => Color.yellow,
+            DiffStatus.Invalid => Color.red,
+            _ => Color.gray,
+        };
 
         private async UniTaskVoid GenerateAsync()
         {
             _isBusy = true;
             _status = "Generating…";
-            _output = string.Empty;
+            _error = string.Empty;
+            _rows = null;
             _cts = new CancellationTokenSource();
             Repaint();
 
@@ -100,8 +179,8 @@ namespace ContentForge.Editor
                 };
 
                 var raw = await ContentForgeClient.GenerateAsync(_serverUrl, request, _cts.Token);
-                _output = Prettify(raw);
-                _status = "Done.";
+                _rows = BuildRows(GenerateResponseParser.Parse(raw));
+                _status = $"{_rows.Count} entries. Review and apply.";
             }
             catch (OperationCanceledException)
             {
@@ -109,13 +188,18 @@ namespace ContentForge.Editor
             }
             catch (ContentForgeException ex)
             {
-                _status = "Error.";
-                _output = ex.Message;
+                _status = string.Empty;
+                _error = ex.Message;
+            }
+            catch (GenerateResponseParseException ex)
+            {
+                _status = string.Empty;
+                _error = $"Could not read the response: {ex.Message}";
             }
             catch (Exception ex)
             {
-                _status = "Unexpected error.";
-                _output = ex.ToString();
+                _status = string.Empty;
+                _error = ex.ToString();
             }
             finally
             {
@@ -126,16 +210,80 @@ namespace ContentForge.Editor
             }
         }
 
-        private static string Prettify(string json)
+        private List<Row> BuildRows(ParsedGeneration parsed)
         {
-            try
+            return parsed.ContentType == GeneratedContentType.Item
+                ? BuildItemRows(parsed.Items)
+                : BuildEnemyRows(parsed.Enemies);
+        }
+
+        private List<Row> BuildItemRows(IReadOnlyList<GeneratedItemDto> dtos)
+        {
+            var mapped = ContentMapper.MapItems(dtos, _levelMin, _levelMax);
+            var existing = LoadExisting<ItemDefinition>(_targetFolder);
+            var diff = ContentDiffer.DiffItems(mapped, existing);
+            return diff.Select(d => ToRow(d, d.Generated.Value)).ToList();
+        }
+
+        private List<Row> BuildEnemyRows(IReadOnlyList<GeneratedEnemyDto> dtos)
+        {
+            var mapped = ContentMapper.MapEnemies(dtos, _levelMin, _levelMax);
+            var existing = LoadExisting<EnemyDefinition>(_targetFolder);
+            var diff = ContentDiffer.DiffEnemies(mapped, existing);
+            return diff.Select(d => ToRow(d, d.Generated.Value)).ToList();
+        }
+
+        private static Row ToRow<T>(DiffEntry<T> entry, ScriptableObject value) where T : ScriptableObject
+        {
+            var detail = entry.Status switch
             {
-                return JToken.Parse(json).ToString(Newtonsoft.Json.Formatting.Indented);
-            }
-            catch
+                DiffStatus.Invalid => string.Join("; ", entry.Generated.Errors),
+                DiffStatus.Changed => string.Join(", ",
+                    entry.Changes.Select(c => $"{c.Field}: {c.OldValue} → {c.NewValue}")),
+                DiffStatus.New => "will be created",
+                _ => "identical",
+            };
+
+            return new Row
             {
-                return json; // not JSON — show as received
+                Title = string.IsNullOrEmpty(entry.Generated.SourceName)
+                    ? "(no name)"
+                    : entry.Generated.SourceName,
+                Status = entry.Status,
+                Detail = detail,
+                Selected = entry.Status is DiffStatus.New or DiffStatus.Changed,
+                Op = new ApplyOp(entry.Status, entry.Generated.Slug, value),
+            };
+        }
+
+        private static Dictionary<string, T> LoadExisting<T>(string folder) where T : ScriptableObject
+        {
+            var map = new Dictionary<string, T>();
+            if (!AssetDatabase.IsValidFolder(folder))
+            {
+                return map;
             }
+
+            foreach (var guid in AssetDatabase.FindAssets($"t:{typeof(T).Name}", new[] { folder }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var so = AssetDatabase.LoadAssetAtPath<T>(path);
+                if (so != null)
+                {
+                    map[Path.GetFileNameWithoutExtension(path)] = so;
+                }
+            }
+
+            return map;
+        }
+
+        private void ApplySelected()
+        {
+            var ops = _rows.Where(r => r.Selected).Select(r => r.Op).ToList();
+            var written = AssetWriter.Apply(_targetFolder, ops);
+            _status = $"Applied {written} asset(s) to {_targetFolder}.";
+            _rows = null; // force a fresh Generate before the next apply
+            Repaint();
         }
     }
 }

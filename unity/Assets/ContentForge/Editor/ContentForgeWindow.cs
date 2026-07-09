@@ -23,6 +23,7 @@ namespace ContentForge.Editor
         {
             public string Title;
             public DiffStatus Status;
+            public string Params;
             public string Detail;
             public bool Selected;
             public ApplyOp Op;
@@ -93,6 +94,19 @@ namespace ContentForge.Editor
                     _cts?.Cancel();
                 }
             }
+
+            // Discards the unapplied preview. Nothing is written until Apply, so this only
+            // drops the in-memory generated entries — no assets are touched.
+            using (new EditorGUI.DisabledScope(_isBusy || _rows == null))
+            {
+                if (GUILayout.Button("Clear"))
+                {
+                    _rows = null;
+                    _status = string.Empty;
+                    _error = string.Empty;
+                    Repaint();
+                }
+            }
             EditorGUILayout.EndHorizontal();
 
             if (!string.IsNullOrEmpty(_status))
@@ -121,8 +135,9 @@ namespace ContentForge.Editor
             _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
             foreach (var row in _rows)
             {
-                EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
+                EditorGUILayout.BeginHorizontal();
                 var applicable = row.Status is DiffStatus.New or DiffStatus.Changed;
                 using (new EditorGUI.DisabledScope(!applicable))
                 {
@@ -134,10 +149,17 @@ namespace ContentForge.Editor
                 EditorGUILayout.LabelField($"[{row.Status}]", GUILayout.Width(90));
                 GUI.color = prev;
 
-                EditorGUILayout.LabelField(row.Title, EditorStyles.boldLabel, GUILayout.Width(180));
-                EditorGUILayout.LabelField(row.Detail);
-
+                EditorGUILayout.LabelField(row.Title, EditorStyles.boldLabel, GUILayout.Width(160));
+                EditorGUILayout.LabelField(row.Params, EditorStyles.miniLabel);
                 EditorGUILayout.EndHorizontal();
+
+                // Second line: field diff (Changed) or validation errors (Invalid).
+                if (!string.IsNullOrEmpty(row.Detail))
+                {
+                    EditorGUILayout.LabelField("    " + row.Detail, EditorStyles.wordWrappedMiniLabel);
+                }
+
+                EditorGUILayout.EndVertical();
             }
             EditorGUILayout.EndScrollView();
 
@@ -222,7 +244,7 @@ namespace ContentForge.Editor
             var mapped = ContentMapper.MapItems(dtos, _levelMin, _levelMax);
             var existing = LoadExisting<ItemDefinition>(_targetFolder);
             var diff = ContentDiffer.DiffItems(mapped, existing);
-            return diff.Select(d => ToRow(d, d.Generated.Value)).ToList();
+            return diff.Select(d => ToRow(d, ContentSummary.Describe(d.Generated.Value))).ToList();
         }
 
         private List<Row> BuildEnemyRows(IReadOnlyList<GeneratedEnemyDto> dtos)
@@ -230,18 +252,19 @@ namespace ContentForge.Editor
             var mapped = ContentMapper.MapEnemies(dtos, _levelMin, _levelMax);
             var existing = LoadExisting<EnemyDefinition>(_targetFolder);
             var diff = ContentDiffer.DiffEnemies(mapped, existing);
-            return diff.Select(d => ToRow(d, d.Generated.Value)).ToList();
+            return diff.Select(d => ToRow(d, ContentSummary.Describe(d.Generated.Value))).ToList();
         }
 
-        private static Row ToRow<T>(DiffEntry<T> entry, ScriptableObject value) where T : ScriptableObject
+        private static Row ToRow<T>(DiffEntry<T> entry, string paramsSummary) where T : ScriptableObject
         {
+            // The params summary is shown for every row; Detail is the status-specific extra
+            // (field diff for Changed, validation errors for Invalid).
             var detail = entry.Status switch
             {
                 DiffStatus.Invalid => string.Join("; ", entry.Generated.Errors),
                 DiffStatus.Changed => string.Join(", ",
                     entry.Changes.Select(c => $"{c.Field}: {c.OldValue} → {c.NewValue}")),
-                DiffStatus.New => "will be created",
-                _ => "identical",
+                _ => string.Empty,
             };
 
             return new Row
@@ -250,9 +273,10 @@ namespace ContentForge.Editor
                     ? "(no name)"
                     : entry.Generated.SourceName,
                 Status = entry.Status,
+                Params = paramsSummary,
                 Detail = detail,
                 Selected = entry.Status is DiffStatus.New or DiffStatus.Changed,
-                Op = new ApplyOp(entry.Status, entry.Generated.Slug, value),
+                Op = new ApplyOp(entry.Status, entry.Generated.Slug, entry.Generated.Value),
             };
         }
 

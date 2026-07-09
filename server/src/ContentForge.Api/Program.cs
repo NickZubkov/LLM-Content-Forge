@@ -23,4 +23,4 @@ app.Run();
 public record HealthResponse(string Status);
 
 // Exposed so the integration tests can spin up the app via WebApplicationFactory<Program>.
-public partial class Program;
+public partial class Program {}

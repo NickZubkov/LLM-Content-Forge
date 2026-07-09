@@ -24,6 +24,7 @@ namespace ContentForge.Editor
             public string Title;
             public DiffStatus Status;
             public string Params;
+            public string Description;
             public string Detail;
             public bool Selected;
             public ApplyOp Op;
@@ -153,7 +154,13 @@ namespace ContentForge.Editor
                 EditorGUILayout.LabelField(row.Params, EditorStyles.miniLabel);
                 EditorGUILayout.EndHorizontal();
 
-                // Second line: field diff (Changed) or validation errors (Invalid).
+                // Generated description (free text) on its own wrapped line.
+                if (!string.IsNullOrEmpty(row.Description))
+                {
+                    EditorGUILayout.LabelField("    " + row.Description, EditorStyles.wordWrappedMiniLabel);
+                }
+
+                // Last line: field diff (Changed) or validation errors (Invalid).
                 if (!string.IsNullOrEmpty(row.Detail))
                 {
                     EditorGUILayout.LabelField("    " + row.Detail, EditorStyles.wordWrappedMiniLabel);
@@ -244,7 +251,8 @@ namespace ContentForge.Editor
             var mapped = ContentMapper.MapItems(dtos, _levelMin, _levelMax);
             var existing = LoadExisting<ItemDefinition>(_targetFolder);
             var diff = ContentDiffer.DiffItems(mapped, existing);
-            return diff.Select(d => ToRow(d, ContentSummary.Describe(d.Generated.Value))).ToList();
+            return diff.Select(d =>
+                ToRow(d, ContentSummary.Describe(d.Generated.Value), d.Generated.Value.description)).ToList();
         }
 
         private List<Row> BuildEnemyRows(IReadOnlyList<GeneratedEnemyDto> dtos)
@@ -252,10 +260,12 @@ namespace ContentForge.Editor
             var mapped = ContentMapper.MapEnemies(dtos, _levelMin, _levelMax);
             var existing = LoadExisting<EnemyDefinition>(_targetFolder);
             var diff = ContentDiffer.DiffEnemies(mapped, existing);
-            return diff.Select(d => ToRow(d, ContentSummary.Describe(d.Generated.Value))).ToList();
+            return diff.Select(d =>
+                ToRow(d, ContentSummary.Describe(d.Generated.Value), d.Generated.Value.description)).ToList();
         }
 
-        private static Row ToRow<T>(DiffEntry<T> entry, string paramsSummary) where T : ScriptableObject
+        private static Row ToRow<T>(DiffEntry<T> entry, string paramsSummary, string description)
+            where T : ScriptableObject
         {
             // The params summary is shown for every row; Detail is the status-specific extra
             // (field diff for Changed, validation errors for Invalid).
@@ -274,6 +284,7 @@ namespace ContentForge.Editor
                     : entry.Generated.SourceName,
                 Status = entry.Status,
                 Params = paramsSummary,
+                Description = description,
                 Detail = detail,
                 Selected = entry.Status is DiffStatus.New or DiffStatus.Changed,
                 Op = new ApplyOp(entry.Status, entry.Generated.Slug, entry.Generated.Value),

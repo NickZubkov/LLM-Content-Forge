@@ -21,7 +21,8 @@ namespace ContentForge.Editor
     }
 
     /// <summary>The only component that touches AssetDatabase. Creates new .asset files and
-    /// updates existing ones in place (Undo-friendly). Skips Unchanged and Invalid ops.</summary>
+    /// updates existing ones in place (updates are undoable; asset creation is not).
+    /// Skips Unchanged and Invalid ops.</summary>
     internal static class AssetWriter
     {
         public static int Apply(string targetFolder, IReadOnlyList<ApplyOp> ops)
@@ -49,7 +50,6 @@ namespace ContentForge.Editor
                     {
                         op.Value.name = op.Slug;
                         AssetDatabase.CreateAsset(op.Value, path);
-                        Undo.RegisterCreatedObjectUndo(op.Value, "Create Content Asset");
                     }
                     else
                     {

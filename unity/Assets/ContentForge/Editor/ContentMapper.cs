@@ -52,6 +52,11 @@ namespace ContentForge.Editor
                 }
 
                 var slug = ContentNaming.Slugify(name);
+                if (name.Length > 0 && slug.Length == 0)
+                {
+                    errors.Add($"Name '{name}' has no letters or digits for a file name.");
+                }
+
                 if (slug.Length > 0 && !seen.Add(slug))
                 {
                     errors.Add($"Duplicate name '{name}' in this batch.");
@@ -107,6 +112,11 @@ namespace ContentForge.Editor
                 }
 
                 var slug = ContentNaming.Slugify(name);
+                if (name.Length > 0 && slug.Length == 0)
+                {
+                    errors.Add($"Name '{name}' has no letters or digits for a file name.");
+                }
+
                 if (slug.Length > 0 && !seen.Add(slug))
                 {
                     errors.Add($"Duplicate name '{name}' in this batch.");

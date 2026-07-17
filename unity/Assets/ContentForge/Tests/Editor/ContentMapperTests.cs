@@ -45,6 +45,13 @@ namespace ContentForge.Editor.Tests
         }
 
         [Test]
+        public void MapItems_NameWithoutLettersOrDigits_MarksInvalid()
+        {
+            var mapped = ContentMapper.MapItems(new[] { Item("!!!", "rare", 5) }, 1, 10);
+            Assert.That(mapped[0].IsValid, Is.False);
+        }
+
+        [Test]
         public void MapItems_DuplicateNamesInBatch_MarksSecondInvalid()
         {
             var mapped = ContentMapper.MapItems(
@@ -68,6 +75,14 @@ namespace ContentForge.Editor.Tests
         public void MapEnemies_NonPositiveHealth_MarksInvalid()
         {
             var dto = new GeneratedEnemyDto { Name = "X", Description = "d", Level = 3, Health = 0, Damage = 8 };
+            var mapped = ContentMapper.MapEnemies(new[] { dto }, 1, 10);
+            Assert.That(mapped[0].IsValid, Is.False);
+        }
+
+        [Test]
+        public void MapEnemies_NameWithoutLettersOrDigits_MarksInvalid()
+        {
+            var dto = new GeneratedEnemyDto { Name = "???", Description = "d", Level = 3, Health = 40, Damage = 8 };
             var mapped = ContentMapper.MapEnemies(new[] { dto }, 1, 10);
             Assert.That(mapped[0].IsValid, Is.False);
         }

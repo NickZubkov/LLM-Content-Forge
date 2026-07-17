@@ -1,20 +1,13 @@
 using ContentForge.Api.Generation;
-using ContentForge.Api.Llm;
 using ContentForge.Api.Prompts;
 using FluentAssertions;
-using Moq;
 
 namespace ContentForge.Api.Tests;
 
 public class ContentGeneratorTests
 {
-    private static ContentGenerator CreateGenerator(string llmResponse)
-    {
-        var llm = new Mock<ILlmClient>();
-        llm.Setup(c => c.CompleteAsync(It.IsAny<LlmPrompt>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(llmResponse);
-        return new ContentGenerator(llm.Object, new PromptBuilder());
-    }
+    private static ContentGenerator CreateGenerator(string llmResponse) =>
+        new(new StubLlmClient(llmResponse), new PromptBuilder());
 
     private static GenerateRequest ItemRequest(IntRange range) =>
         new(ContentType.Item, Count: 1, Theme: "frozen dungeon", LevelRange: range);

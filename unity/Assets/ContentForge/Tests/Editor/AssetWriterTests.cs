@@ -66,5 +66,28 @@ namespace ContentForge.Editor.Tests
 
             Assert.That(written, Is.EqualTo(0));
         }
+
+        [Test]
+        public void Apply_FolderOutsideAssets_Throws()
+        {
+            var so = ScriptableObject.CreateInstance<ItemDefinition>();
+            Assert.Throws<System.ArgumentException>(
+                () => AssetWriter.Apply("Packages/Foo", new List<ApplyOp> { new(DiffStatus.New, "x", so) }));
+        }
+
+        [Test]
+        public void Apply_ToleratesBackslashesAndTrailingSlash()
+        {
+            var so = ScriptableObject.CreateInstance<ItemDefinition>();
+            so.itemName = "Frost Blade";
+
+            var written = AssetWriter.Apply(
+                "Assets\\ContentForgeTemp\\", new List<ApplyOp> { new(DiffStatus.New, "frost-blade", so) });
+
+            Assert.That(written, Is.EqualTo(1));
+            Assert.That(
+                AssetDatabase.LoadAssetAtPath<ItemDefinition>($"{TempFolder}/frost-blade.asset"),
+                Is.Not.Null);
+        }
     }
 }

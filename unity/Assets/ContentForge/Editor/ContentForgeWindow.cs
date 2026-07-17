@@ -324,9 +324,18 @@ namespace ContentForge.Editor
         private void ApplySelected()
         {
             var ops = _rows.Where(r => r.Selected).Select(r => r.Op).ToList();
-            var written = AssetWriter.Apply(_targetFolder, ops);
-            _status = $"Applied {written} asset(s) to {_targetFolder}.";
-            _rows = null; // force a fresh Generate before the next apply
+            try
+            {
+                var written = AssetWriter.Apply(_targetFolder, ops);
+                _status = $"Applied {written} asset(s) to {_targetFolder}.";
+                _error = string.Empty;
+                _rows = null; // force a fresh Generate before the next apply
+            }
+            catch (Exception ex)
+            {
+                _status = string.Empty;
+                _error = ex.Message;
+            }
             Repaint();
         }
     }

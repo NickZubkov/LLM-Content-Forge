@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -25,7 +26,8 @@ namespace ContentForge.Editor
     {
         public static int Apply(string targetFolder, IReadOnlyList<ApplyOp> ops)
         {
-            EnsureFolder(targetFolder);
+            var folder = NormalizeFolder(targetFolder);
+            EnsureFolder(folder);
 
             var written = 0;
             try
@@ -38,7 +40,7 @@ namespace ContentForge.Editor
                         continue;
                     }
 
-                    var path = $"{targetFolder}/{op.Slug}.asset";
+                    var path = $"{folder}/{op.Slug}.asset";
                     var existing = op.Status == DiffStatus.Changed
                         ? AssetDatabase.LoadAssetAtPath<ScriptableObject>(path)
                         : null;
@@ -70,6 +72,20 @@ namespace ContentForge.Editor
             }
 
             return written;
+        }
+
+        /// <summary>Accepts forward/backward slashes and a trailing separator; rejects anything
+        /// outside Assets/ before any folder gets created.</summary>
+        private static string NormalizeFolder(string folder)
+        {
+            var normalized = (folder ?? string.Empty).Replace('\\', '/').TrimEnd('/');
+            if (normalized != "Assets" && !normalized.StartsWith("Assets/", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Target folder must be inside 'Assets/', got '{folder}'.", nameof(folder));
+            }
+
+            return normalized;
         }
 
         private static void EnsureFolder(string folder)

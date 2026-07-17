@@ -80,7 +80,13 @@ namespace ContentForge.Editor
                 _levelMax = EditorGUILayout.IntField("Level Max", _levelMax);
                 EditorGUILayout.EndHorizontal();
 
+                EditorGUI.BeginChangeCheck();
                 _targetFolder = EditorGUILayout.TextField("Target Folder", _targetFolder);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    // The preview was diffed against the previous folder — it is stale now.
+                    _rows = null;
+                }
             }
 
             EditorGUILayout.Space();

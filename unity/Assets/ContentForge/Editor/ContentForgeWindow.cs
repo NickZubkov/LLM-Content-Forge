@@ -29,13 +29,13 @@ namespace ContentForge.Editor
             public ApplyOp Op;
         }
 
-        private string _serverUrl = "http://localhost:8080";
-        private ContentKind _contentType = ContentKind.Item;
-        private int _count = 5;
-        private string _theme = "frozen dungeon";
-        private int _levelMin = 1;
-        private int _levelMax = 10;
-        private string _targetFolder = "Assets/ContentForge/Generated/Items";
+        [SerializeField] private string _serverUrl = "http://localhost:8080";
+        [SerializeField] private ContentKind _contentType = ContentKind.Item;
+        [SerializeField] private int _count = 5;
+        [SerializeField] private string _theme = "frozen dungeon";
+        [SerializeField] private int _levelMin = 1;
+        [SerializeField] private int _levelMax = 10;
+        [SerializeField] private string _targetFolder = "Assets/ContentForge/Generated/Items";
 
         private bool _isBusy;
         private string _status = string.Empty;

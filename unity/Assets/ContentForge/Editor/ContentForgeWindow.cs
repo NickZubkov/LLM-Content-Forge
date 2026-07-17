@@ -15,8 +15,6 @@ namespace ContentForge.Editor
     /// </summary>
     public sealed class ContentForgeWindow : EditorWindow
     {
-        private enum ContentKind { Item, Enemy }
-
         // One preview row, unified across item/enemy so OnGUI has a single render path.
         private sealed class Row
         {
@@ -30,7 +28,7 @@ namespace ContentForge.Editor
         }
 
         [SerializeField] private string _serverUrl = "http://localhost:8080";
-        [SerializeField] private ContentKind _contentType = ContentKind.Item;
+        [SerializeField] private GeneratedContentType _contentType = GeneratedContentType.Item;
         [SerializeField] private int _count = 5;
         [SerializeField] private string _theme = "frozen dungeon";
         [SerializeField] private int _levelMin = 1;
@@ -64,10 +62,10 @@ namespace ContentForge.Editor
                 _serverUrl = EditorGUILayout.TextField("Server URL", _serverUrl);
 
                 EditorGUI.BeginChangeCheck();
-                _contentType = (ContentKind)EditorGUILayout.EnumPopup("Content Type", _contentType);
+                _contentType = (GeneratedContentType)EditorGUILayout.EnumPopup("Content Type", _contentType);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    _targetFolder = _contentType == ContentKind.Item
+                    _targetFolder = _contentType == GeneratedContentType.Item
                         ? "Assets/ContentForge/Generated/Items"
                         : "Assets/ContentForge/Generated/Enemies";
                 }

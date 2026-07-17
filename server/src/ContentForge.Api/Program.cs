@@ -66,7 +66,8 @@ app.MapGet("/api/v1/health", () => Results.Ok(new HealthResponse("ok")))
    .WithTags("System");
 
 app.MapPost("/api/v1/generate",
-    async (GenerateRequest request, IContentGenerator generator, CancellationToken cancellationToken) =>
+    async (GenerateRequest request, IContentGenerator generator, ILogger<Program> logger,
+        CancellationToken cancellationToken) =>
     {
         try
         {
@@ -75,6 +76,7 @@ app.MapPost("/api/v1/generate",
         }
         catch (LlmException ex)
         {
+            logger.LogWarning(ex, "LLM backend call failed");
             return Results.Problem(
                 title: "LLM backend error",
                 detail: ex.Message,
@@ -82,6 +84,7 @@ app.MapPost("/api/v1/generate",
         }
         catch (ContentValidationException ex)
         {
+            logger.LogWarning(ex, "LLM returned content that failed validation");
             return Results.Problem(
                 title: "Invalid content from LLM",
                 detail: ex.Message,

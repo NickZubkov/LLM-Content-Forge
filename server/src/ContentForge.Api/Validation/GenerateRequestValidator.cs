@@ -8,6 +8,9 @@ public sealed class GenerateRequestValidator : AbstractValidator<GenerateRequest
 {
     public GenerateRequestValidator()
     {
+        RuleFor(request => request.ContentType)
+            .IsInEnum();
+
         RuleFor(request => request.Count)
             .InclusiveBetween(1, 50);
 

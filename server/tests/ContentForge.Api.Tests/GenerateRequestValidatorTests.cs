@@ -40,4 +40,12 @@ public class GenerateRequestValidatorTests
 
         _validator.Validate(request).IsValid.Should().BeFalse();
     }
+
+    [Fact]
+    public void Rejects_undefined_content_type()
+    {
+        var request = Valid() with { ContentType = (ContentType)999 };
+
+        _validator.Validate(request).IsValid.Should().BeFalse();
+    }
 }

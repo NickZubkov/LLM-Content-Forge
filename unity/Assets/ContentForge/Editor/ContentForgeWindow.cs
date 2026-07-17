@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using ContentForge;
 using Cysharp.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
@@ -47,6 +46,13 @@ namespace ContentForge.Editor
 
         [MenuItem("Window/Content Forge")]
         public static void Open() => GetWindow<ContentForgeWindow>("Content Forge");
+
+        private void OnDisable()
+        {
+            // Window closing or domain reload — cancel any in-flight request so its
+            // continuation does not touch a destroyed window.
+            _cts?.Cancel();
+        }
 
         private void OnGUI()
         {
@@ -235,7 +241,10 @@ namespace ContentForge.Editor
                 _isBusy = false;
                 _cts?.Dispose();
                 _cts = null;
-                Repaint();
+                if (this != null) // destroyed while the request was in flight
+                {
+                    Repaint();
+                }
             }
         }
 
